@@ -1,0 +1,188 @@
+#Import Libraries
+
+# !pip install faker fastavro
+
+import random
+import json
+import fastavro
+from datetime import datetime
+from faker import Faker
+
+fake = Faker()
+
+
+
+
+
+#Define AVRO Schemas
+
+# AVRO Schema for GeoPoint
+geopoint_schema = {
+    "type": "record",
+    "name": "GeoPoint",
+    "namespace": "ride.hailing",
+    "fields": [
+        {"name": "latitude", "type": "float"},
+        {"name": "longitude", "type": "float"},
+    ]
+}
+
+# AVRO Schema for Passenger Requests (Fixed)
+passenger_request_schema = {
+    "type": "record",
+    "name": "PassengerRequest",
+    "namespace": "ride.hailing",
+    "fields": [
+        {"name": "request_id", "type": "string"},
+        {"name": "passenger_id", "type": "string"},
+        {"name": "timestamp", "type": "string"},
+        {
+            "name": "pickup_location",
+            "type": {
+                "type": "record",
+                "name": "GeoPoint",
+                "fields": [
+                    {"name": "latitude", "type": "float"},
+                    {"name": "longitude", "type": "float"}
+                ]
+            }
+        },
+        {
+            "name": "dropoff_location",
+            "type": "GeoPoint"
+        },
+        {"name": "status", "type": {"type": "enum", "name": "RequestStatus", "symbols": ["Requested", "Cancelled", "Accepted"]}}
+    ]
+}
+
+
+# AVRO Schema for Ride Status Updates
+ride_status_schema = {
+    "type": "record",
+    "name": "RideStatusUpdate",
+    "namespace": "ride.hailing",
+    "fields": [
+        {"name": "ride_id", "type": "string"},
+        {"name": "driver_id", "type": "string"},
+        {"name": "passenger_id", "type": "string"},
+        {"name": "timestamp", "type": "string"},
+        {"name": "status", "type": {"type": "enum", "name": "RideStatus", "symbols": ["Accepted", "Ongoing", "Completed"]}},
+        {"name": "surge_multiplier", "type": "float"}
+    ]
+}
+
+# AVRO Schema for Traffic Conditions
+traffic_conditions_schema = {
+    "type": "record",
+    "name": "TrafficConditions",
+    "namespace": "traffic.monitoring",
+    "fields": [
+        {"name": "datetime", "type": "string"},
+        {"name": "junction", "type": "int"},
+        {"name": "vehicles", "type": "int"},
+        {"name": "condition", "type": {"type": "enum", "name": "ConditionType", "symbols": ["Good", "Moderate", "Heavy"]}}
+    ]
+}
+
+
+
+
+
+
+
+
+#Define Data Generation Functions
+
+# Generate Passenger Request Data
+def generate_passenger_request():
+    return {
+        "request_id": fake.uuid4(),
+        "passenger_id": fake.uuid4(),
+        "timestamp": datetime.utcnow().isoformat(),
+        "pickup_location": {"latitude": round(random.uniform(-90, 90), 6), "longitude": round(random.uniform(-180, 180), 6)},
+        "dropoff_location": {"latitude": round(random.uniform(-90, 90), 6), "longitude": round(random.uniform(-180, 180), 6)},
+        "status": random.choice(["Requested", "Cancelled", "Accepted"])
+    }
+
+# Generate Ride Status Data
+def generate_ride_status():
+    return {
+        "ride_id": fake.uuid4(),
+        "driver_id": fake.uuid4(),
+        "passenger_id": fake.uuid4(),
+        "timestamp": datetime.utcnow().isoformat(),
+        "status": random.choice(["Accepted", "Ongoing", "Completed"]),
+        "surge_multiplier": round(random.uniform(1.0, 3.0), 2)
+    }
+
+# Generate Traffic Condition Data
+def generate_traffic_condition():
+    return {
+        "datetime": datetime.utcnow().isoformat(),
+        "junction": random.randint(1, 20),
+        "vehicles": random.randint(10, 500),
+        "condition": random.choice(["Good", "Moderate", "Heavy"])
+    }
+
+
+
+
+
+
+
+#Generate & Display Data
+
+# Generate data with user-defined number of records
+def generate_data(num_records=5000):
+    data_requests = [generate_passenger_request() for _ in range(num_records)]
+    data_rides = [generate_ride_status() for _ in range(num_records)]
+    data_traffic = [generate_traffic_condition() for _ in range(num_records)]
+    return data_requests, data_rides, data_traffic
+
+# Generate 5000 records (adjust as needed)
+num_records = 5000
+data_requests, data_rides, data_traffic = generate_data(num_records)
+
+# Print JSON preview
+print(json.dumps({
+    "passenger_requests": data_requests[:5],  # Print first 5 records
+    "ride_status_updates": data_rides[:5],
+    "traffic_conditions": data_traffic[:5]
+}, indent=4))
+
+
+
+
+
+
+
+#Save Data to AVRO Files
+
+# Function to save data in AVRO format
+def save_to_avro(filename, schema, records):
+    # Parse schemas to handle named types like GeoPoint
+    parsed_schema = fastavro.parse_schema(schema, named_schemas={'GeoPoint': geopoint_schema})
+    with open(filename, "wb") as out_file:
+        fastavro.writer(out_file, parsed_schema, records)  # Use parsed schema
+
+# Save data to AVRO files
+save_to_avro("passenger_requests.avro", passenger_request_schema, data_requests)
+save_to_avro("ride_status_updates.avro", ride_status_schema, data_rides)
+save_to_avro("traffic_conditions.avro", traffic_conditions_schema, data_traffic)
+
+print("Data saved to AVRO files successfully!")
+
+
+
+
+
+
+
+
+#Download AVRO Files from Google Colab
+
+from google.colab import files
+
+files.download("passenger_requests.avro")
+files.download("ride_status_updates.avro")
+files.download("traffic_conditions.avro")
